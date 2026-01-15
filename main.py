@@ -2,25 +2,27 @@ import streamlit as st
 import matplotlib.pyplot as plt
 from model import simulate_cruise_control
 
-st.set_page_config(page_title="Tempomat – UAR", layout="centered")
-st.title("Tempomat – układ automatycznej regulacji")
+st.set_page_config(page_title="Tempomat – model realistyczny", layout="wide")
+st.title("Tempomat – układ automatycznej regulacji (model realistyczny)")
 
-# ===== SUWAKI =====
+# ===== PANEL STEROWANIA =====
 
-st.subheader("Wartość zadana")
-v_set = st.slider("Prędkość zadana [m/s]", 5.0, 40.0, 20.0)
+st.sidebar.header("Sterowanie")
 
-st.subheader("Regulator PI")
-kp = st.slider("Wzmocnienie kp", 0.1, 5.0, 0.8)
-Ti = st.slider("Czas całkowania Ti [s]", 1.0, 20.0, 5.0)
+v_set = st.sidebar.slider("Prędkość zadana [m/s]", 5.0, 40.0, 20.0)
 
-st.subheader("Model pojazdu")
-m = st.slider("Masa pojazdu [kg]", 800, 2500, 1200)
-c = st.slider("Opory ruchu c", 10.0, 200.0, 50.0)
-ku = st.slider("Wzmocnienie napędu ku", 100.0, 1000.0, 400.0)
+st.sidebar.subheader("Regulator PI")
+kp = st.sidebar.slider("kp", 0.1, 3.0, 0.6)
+Ti = st.sidebar.slider("Ti [s]", 1.0, 20.0, 6.0)
 
-st.subheader("Zakłócenie")
-slope = st.slider("Nachylenie drogi α [rad]", -0.1, 0.1, 0.0)
+st.sidebar.subheader("Pojazd")
+m = st.sidebar.slider("Masa pojazdu [kg]", 800, 2500, 1400)
+ku = st.sidebar.slider("Moc napędu ku", 1000.0, 5000.0, 3000.0)
+c1 = st.sidebar.slider("Opory toczenia c1", 10.0, 80.0, 30.0)
+c2 = st.sidebar.slider("Opór aerodynamiczny c2", 0.5, 6.0, 2.5)
+
+st.sidebar.subheader("Zakłócenie")
+slope = st.sidebar.slider("Nachylenie drogi α [rad]", -0.1, 0.1, 0.0)
 
 # ===== SYMULACJA =====
 
@@ -29,19 +31,38 @@ t, v, u, e = simulate_cruise_control(
     kp=kp,
     Ti=Ti,
     m=m,
-    c=c,
     ku=ku,
+    c1=c1,
+    c2=c2,
     slope=slope
 )
 
-# ===== WYKRESY =====
+# ===== UKŁAD KOLUMN =====
 
-fig, ax = plt.subplots()
-ax.plot(t, v, label="v(t) – prędkość")
-ax.axhline(v_set, linestyle="--", label="v* – zadana")
-ax.set_xlabel("Czas [s]")
-ax.set_ylabel("Prędkość [m/s]")
-ax.legend()
-ax.grid()
+col1, col2 = st.columns([2, 1])
 
-st.pyplot(fig)
+# ===== WYKRES =====
+with col1:
+    st.subheader("Przebieg prędkości")
+
+    fig, ax = plt.subplots()
+    ax.plot(t, v, label="v(t) – prędkość")
+    ax.axhline(v_set, linestyle="--", label="v* – zadana")
+
+    ax.set_xlabel("Czas [s]")
+    ax.set_ylabel("Prędkość [m/s]")
+    ax.grid()
+    ax.legend()
+
+    st.pyplot(fig)
+
+# ===== INFORMACJE =====
+with col2:
+    st.subheader("Parametry")
+    st.write(f"Prędkość zadana: **{v_set:.1f} m/s**")
+    st.write(f"Masa pojazdu: **{m} kg**")
+    st.write(f"Nachylenie drogi: **{slope:.2f} rad**")
+
+    st.subheader("Stan końcowy")
+    st.write(f"Osiągnięta prędkość: **{v[-1]:.1f} m/s**")
+    st.write(f"Gaz (u): **{u[-1]*100:.0f} %**")
