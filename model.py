@@ -3,15 +3,15 @@ import numpy as np
 
 def simulate_cruise_control(
     v_set=20.0,     # prędkość zadana [m/s]
-    v0=0.0,         # prędkość początkowa
-    kp=0.6,         # regulator PI
-    Ti=6.0,
-    Tp=0.1,         # okres próbkowania [s]
-    N=1000,         # liczba kroków (100 s)
+    v0=0.0,         # prędkość początkowa [m/s]
+    kp=0.6,         # wzmocnienie regulatora
+    Ti=6.0,         # stała całkowania [s]
+    Tp=0.1,         # krok symulacji [s]
+    N=1000,         # liczba próbek
     m=1400.0,       # masa pojazdu [kg]
-    ku=3000.0,      # "moc" napędu
-    c1=30.0,        # opory toczenia (liniowe)
-    c2=2.5,         # opory aerodynamiczne (kwadratowe)
+    ku=3000.0,      # wzmocnienie napędu [N]
+    c1=30.0,        # opory toczenia [kg/s]
+    c2=2.5,         # opór aerodynamiczny [kg/m]
     slope=0.0       # nachylenie drogi [rad]
 ):
     g = 9.81
@@ -21,35 +21,33 @@ def simulate_cruise_control(
     e = np.zeros(N)
 
     v[0] = v0
+    u_prev = 0.0
+    e_prev = 0.0
 
     for n in range(1, N):
         # uchyb regulacji
-        e[n] = v_set - v[n-1]
+        e[n] = v_set - v[n - 1]
 
-        # regulator PI (algorytm przyrostowy)
-        du = kp * (e[n] - e[n-1]) + (Tp / Ti) * e[n]
-        u[n] = u[n-1] + du
-
-        # ograniczenie sterowania (gaz 0–100%)
+        # regulator PI – algorytm przyrostowy
+        du = kp * ((e[n] - e_prev) + (Tp / Ti) * e[n])
+        u[n] = u_prev + du
         u[n] = np.clip(u[n], 0.0, 1.0)
 
-        # zakłócenie: podjazd 30–50 s
-        if 30 < n * Tp < 50:
-            alpha = slope
-        else:
-            alpha = 0.0
+        # zakłócenie – podjazd w środku symulacji
+        current_slope = slope if 300 < n < 500 else 0.0
 
-        # model pojazdu (REALISTYCZNY)
-        v[n] = v[n-1] + (Tp / m) * (
-            ku * u[n]
-            - c1 * v[n-1]
-            - c2 * v[n-1]**2
-            - m * g * alpha
-        )
+        # siły
+        F_drive = ku * u[n]
+        F_resist = c1 * v[n - 1] + c2 * v[n - 1] ** 2
+        F_gravity = m * g * np.sin(current_slope)
 
-        # zabezpieczenie
+        # równanie ruchu
+        v[n] = v[n - 1] + (Tp / m) * (F_drive - F_resist - F_gravity)
         if v[n] < 0:
             v[n] = 0.0
+
+        u_prev = u[n]
+        e_prev = e[n]
 
     t = np.arange(N) * Tp
     return t, v, u, e

@@ -2,34 +2,69 @@ import streamlit as st
 import matplotlib.pyplot as plt
 from model import simulate_cruise_control
 
-st.set_page_config(page_title="Tempomat – model realistyczny", layout="wide")
-st.title("Tempomat – układ automatycznej regulacji (model realistyczny)")
+st.set_page_config(layout="wide")
+st.title("🚗 Model tempomatu – układ automatycznej regulacji")
 
-# ===== PANEL STEROWANIA =====
+# --- PANEL BOCZNY ---
+st.sidebar.header("Parametry układu")
 
-st.sidebar.header("Sterowanie")
+v_set = st.sidebar.slider(
+    "Prędkość zadana [m/s]",
+    5.0, 45.0, 20.0, step=1.0
+)
 
-v_set = st.sidebar.slider("Prędkość zadana [m/s]", 5.0, 40.0, 20.0)
+m = st.sidebar.slider(
+    "Masa pojazdu [kg]",
+    800, 2500, 1400, step=50
+)
 
-st.sidebar.subheader("Regulator PI")
-kp = st.sidebar.slider("kp", 0.1, 3.0, 0.6)
-Ti = st.sidebar.slider("Ti [s]", 1.0, 20.0, 6.0)
+ku = st.sidebar.slider(
+    "Wzmocnienie napędu ku [N]",
+    1000, 6000, 3000, step=100
+)
 
-st.sidebar.subheader("Pojazd")
-m = st.sidebar.slider("Masa pojazdu [kg]", 800, 2500, 1400)
-ku = st.sidebar.slider("Moc napędu ku", 1000.0, 5000.0, 3000.0)
-c1 = st.sidebar.slider("Opory toczenia c1", 10.0, 80.0, 30.0)
-c2 = st.sidebar.slider("Opór aerodynamiczny c2", 0.5, 6.0, 2.5)
+kp = st.sidebar.slider(
+    "Wzmocnienie regulatora Kp [-]",
+    0.1, 2.0, 0.6, step=0.1
+)
 
-st.sidebar.subheader("Zakłócenie")
-slope = st.sidebar.slider("Nachylenie drogi α [rad]", -0.1, 0.1, 0.0)
+Ti = st.sidebar.slider(
+    "Stała całkowania Ti [s]",
+    1.0, 15.0, 6.0, step=0.5
+)
 
-# ===== SYMULACJA =====
+c1 = st.sidebar.slider(
+    "Opory toczenia c₁ [kg/s]",
+    5.0, 120.0, 30.0, step=1.0,
+    help="Opory proporcjonalne do prędkości"
+)
 
+c2 = st.sidebar.slider(
+    "Opór aerodynamiczny c₂ [kg/m]",
+    0.5, 8.0, 2.5, step=0.1,
+    help="Opór rosnący z kwadratem prędkości"
+)
+
+slope = st.sidebar.slider(
+    "Nachylenie drogi [rad]",
+    0.0, 0.2, 0.0, step=0.01
+)
+
+T_sim = st.sidebar.slider(
+    "Czas symulacji [s]",
+    20, 100, 100, step=10
+)
+
+Tp = 0.1
+N = int(T_sim / Tp)
+
+# --- SYMULACJA ---
 t, v, u, e = simulate_cruise_control(
     v_set=v_set,
     kp=kp,
     Ti=Ti,
+    Tp=Tp,
+    N=N,
     m=m,
     ku=ku,
     c1=c1,
@@ -37,32 +72,44 @@ t, v, u, e = simulate_cruise_control(
     slope=slope
 )
 
-# ===== UKŁAD KOLUMN =====
-
+# --- WIZUALIZACJA ---
 col1, col2 = st.columns([2, 1])
 
-# ===== WYKRES =====
 with col1:
-    st.subheader("Przebieg prędkości")
-
     fig, ax = plt.subplots()
-    ax.plot(t, v, label="v(t) – prędkość")
-    ax.axhline(v_set, linestyle="--", label="v* – zadana")
+    ax.plot(
+        t, v,
+        label="v(t)",
+        color="tab:blue"
+    )
 
+    ax.axhline(
+        v_set,
+        linestyle="--",
+        color="tab:red",
+        linewidth=2,
+        label="v_zad"
+    )
     ax.set_xlabel("Czas [s]")
     ax.set_ylabel("Prędkość [m/s]")
-    ax.grid()
+    ax.set_title("Odpowiedź układu regulacji prędkości")
+    ax.grid(True)
     ax.legend()
-
     st.pyplot(fig)
 
-# ===== INFORMACJE =====
 with col2:
-    st.subheader("Parametry")
-    st.write(f"Prędkość zadana: **{v_set:.1f} m/s**")
-    st.write(f"Masa pojazdu: **{m} kg**")
-    st.write(f"Nachylenie drogi: **{slope:.2f} rad**")
+    st.subheader("Informacje")
 
-    st.subheader("Stan końcowy")
-    st.write(f"Osiągnięta prędkość: **{v[-1]:.1f} m/s**")
-    st.write(f"Gaz (u): **{u[-1]*100:.0f} %**")
+    st.metric("Prędkość ustalona [m/s]", f"{v[-1]:.2f}")
+    st.metric("Sterowanie (gaz) [%]", f"{u[-1]*100:.1f}")
+
+    F_res = c1 * v[-1] + c2 * v[-1] ** 2
+    st.metric("Siła oporów [N]", f"{F_res:.0f}")
+
+    if u[-1] >= 0.99:
+        st.warning("⚠️ Nasycenie napędu – prędkość zadana nieosiągalna")
+
+st.caption(
+    "Model uwzględnia regulator PI oraz nieliniowe opory ruchu "
+    "(toczenia i aerodynamiczne)."
+)
